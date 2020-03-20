@@ -41,10 +41,27 @@
 			constructor(ctx) {
 				this.ctx = ctx;
 				this.run = false;
+				this.blobBuffer = [];
 			}
 
 			stop() {
 				this.run = false;
+			}
+
+			async draw() {
+				const t0 = performance.now()
+				if (this.blobBuffer.length>0) {
+					const blob = this.blobBuffer.shift()
+					const bitmap = await createImageBitmap(blob)
+					this.ctx.drawImage(bitmap, 0, 0, 900, 500)
+					bitmap.close()
+				}
+				const t1 = performance.now()
+				if(t1-t0 > 500) {console.log('loong')}
+				
+				requestAnimationFrame(async ()=>{
+					await this.draw()
+				})
 			}
 
 			start() {
@@ -72,10 +89,10 @@
 								}
 								if (buffer.length > 0) {
 									const rnPosition = findSubarray(buffer, [13, 10, 13, 10])
-									const blob = new Blob([buffer.subarray(rnPosition+4)], {type: 'image/jpeg'})
-									const bitmap = await createImageBitmap(blob)
-									this.ctx.drawImage(bitmap, 0, 0, 900, 500);
-									bitmap.close()
+									if(this.blobBuffer.length<2) {
+										const blob = new Blob([buffer.subarray(rnPosition+4)], {type: 'image/jpeg'})
+										this.blobBuffer.push(blob)
+									}
 									buffer = new Uint8Array()
 								}
 								current = current.subarray(position+boundary.length)
@@ -88,6 +105,10 @@
 						})
 					}
 					read()
+				})
+
+				requestAnimationFrame(async ()=>{
+					await this.draw()
 				})
 			}
 		}
