@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<title></title>
+</head>
+
+<body>
+	<button id="calculate">Calculate</button>
+	<div id="status">&nbsp;</div>
+	<div class="display">
+		<div>
+			<canvas id="canvas-worker" width="900" height="500"></canvas>
+		</div>
+		<div>
+			<img src="http://localhost:5255/stream/stream2" width="900" height="500"></canvas>
+		</div>
+	</div>
+	<script id="worker-script"> // type="script/worker"
+		class MyWorker {
+			constructor(ctx) {
+				this.ctx = ctx;
+				this.responsePromise = null;
+				this.frame = 0;
+				this.run = false;
+			}
+
+			async draw() {
+				let imageSrc = 'http://localhost:5255/last/dd.jpg';
+				let responsePromise = fetch(imageSrc)
+				if (this.frame++ % 2) {
+					return;
+				}
+				if (this.responsePromise !== null) {
+					const result = await this.responsePromise
+					if (!result.bodyUsed) {
+						const fileBlob = await result.blob()
+						if (fileBlob.size > 0) {
+							const imageBitmap = await createImageBitmap(fileBlob)
+							this.ctx.drawImage(imageBitmap, 0, 0, 900, 500);
+						}
+					}
+				}
+				this.responsePromise = responsePromise
+				//imageBitmap.close()
+			};
+
+			async animate() {
+				if (!this.run) {
+					return;
+				}
+				await this.draw();
+				requestAnimationFrame(this.animate.bind(this));
+			}
+
+			stop() {
+				this.run = false;
+			}
+
+			start() {
+				this.run = true;
+				this.animate();
+			}
+		}
+		let worker = null;
+		self.onmessage = function(e) {
+		switch (e.data.msg) {
+			case 'start':
+			if (!worker) {
+				worker = new MyWorker(e.data.canvas.getContext('2d'));
+			}
+			worker.start();
+			break;
+			case 'stop':
+			worker.stop();
+			break;
+		}
+		};
+  	</script>
+	<script>
+		(async () => {
+
+			function fib(num) {
+				return (num <= 1) ? 1 : fib(num - 1) + fib(num - 2);
+			}
+
+			document.querySelector('#calculate').addEventListener('click', () => {
+				document.querySelector('#status').innerText = 'Calculating on main thread';
+				requestAnimationFrame(() => {
+					requestAnimationFrame(() => {
+						fib(40);
+						document.querySelector('#status').innerText = 'Done!';
+					});
+				})
+			});
+
+			const workerCode = document.querySelector('#worker-script').textContent;
+			const blob = new Blob([workerCode], { type: 'text/javascript' });
+			const url = URL.createObjectURL(blob);
+			const worker = new Worker(url);
+
+			const offscreen = document.querySelector('#canvas-worker').transferControlToOffscreen();
+			const urlParts = location.href.split('/');
+			if (urlParts[urlParts.length - 1].indexOf('.') !== -1) {
+				urlParts.pop();
+			}
+			worker.postMessage({ msg: 'start', origin: urlParts.join('/'), canvas: offscreen }, [offscreen]);
+			URL.revokeObjectURL(url); // cleanup
+		})();
+
+
+	</script>
+</body>
+
+</html>
