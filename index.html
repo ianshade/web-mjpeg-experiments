@@ -27,22 +27,6 @@
 			}
 
 			async draw() {
-				let imageSrc = 'http://localhost:5255/last/dd.jpg';
-				let responsePromise = fetch(imageSrc)
-				if (this.frame++ % 2) {
-					return;
-				}
-				if (this.responsePromise !== null) {
-					const result = await this.responsePromise
-					if (!result.bodyUsed) {
-						const fileBlob = await result.blob()
-						if (fileBlob.size > 0) {
-							const imageBitmap = await createImageBitmap(fileBlob)
-							this.ctx.drawImage(imageBitmap, 0, 0, 900, 500);
-						}
-					}
-				}
-				this.responsePromise = responsePromise
 				//imageBitmap.close()
 			};
 
@@ -50,7 +34,7 @@
 				if (!this.run) {
 					return;
 				}
-				await this.draw();
+				//await this.draw();
 				requestAnimationFrame(this.animate.bind(this));
 			}
 
@@ -60,22 +44,30 @@
 
 			start() {
 				this.run = true;
-				this.animate();
+				var socket = io('http://localhost:5255');
+				socket.on('image', async (data) => {
+					const blob = new Blob([data])
+					const imageBitmap = await createImageBitmap(blob)
+					this.ctx.drawImage(imageBitmap, 0, 0, 900, 500);
+					imageBitmap.close()
+				});
+				//this.animate();
 			}
 		}
 		let worker = null;
 		self.onmessage = function(e) {
-		switch (e.data.msg) {
-			case 'start':
-			if (!worker) {
-				worker = new MyWorker(e.data.canvas.getContext('2d'));
+			switch (e.data.msg) {
+				case 'start':
+				if (!worker) {
+					self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.3.0/socket.io.js')
+					worker = new MyWorker(e.data.canvas.getContext('2d'));
+				}
+				worker.start();
+				break;
+				case 'stop':
+				worker.stop();
+				break;
 			}
-			worker.start();
-			break;
-			case 'stop':
-			worker.stop();
-			break;
-		}
 		};
   	</script>
 	<script>
