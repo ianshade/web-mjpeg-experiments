@@ -14,44 +14,33 @@
 			<canvas id="canvas-worker" width="900" height="500"></canvas>
 		</div>
 		<div>
-			<img src="http://localhost:5255/stream/stream2" width="900" height="500"></canvas>
+			<img src="http://localhost:5255/stream/stream2" width="900" height="500">
 		</div>
 	</div>
 	<script id="worker-script"> // type="script/worker"
+		function findSubarray(arr, subarr) {
+			for (var i = 0; i < 1 + (arr.length - subarr.length); i++) {
+				var j = 0;
+				for (; j < subarr.length; j++)
+					if (arr[i + j] !== subarr[j])
+						break;
+				if (j == subarr.length)
+					return i;
+			}
+			return -1;
+		}
+		function mergeTypedArrays(a, b) {
+			if(!b || b.length === 0) return a;
+			if(!a || a.length === 0) return b;
+			var c = new a.constructor(a.length + b.length);
+			c.set(a);
+			c.set(b, a.length);
+			return c;
+		}
 		class MyWorker {
 			constructor(ctx) {
 				this.ctx = ctx;
-				this.responsePromise = null;
-				this.frame = 0;
 				this.run = false;
-			}
-
-			async draw() {
-				let imageSrc = 'http://localhost:5255/last/dd.jpg';
-				let responsePromise = fetch(imageSrc)
-				if (this.frame++ % 2) {
-					return;
-				}
-				if (this.responsePromise !== null) {
-					const result = await this.responsePromise
-					if (!result.bodyUsed) {
-						const fileBlob = await result.blob()
-						if (fileBlob.size > 0) {
-							const imageBitmap = await createImageBitmap(fileBlob)
-							this.ctx.drawImage(imageBitmap, 0, 0, 900, 500);
-						}
-					}
-				}
-				this.responsePromise = responsePromise
-				//imageBitmap.close()
-			};
-
-			async animate() {
-				if (!this.run) {
-					return;
-				}
-				await this.draw();
-				requestAnimationFrame(this.animate.bind(this));
 			}
 
 			stop() {
@@ -60,7 +49,47 @@
 
 			start() {
 				this.run = true;
-				this.animate();
+				//this.animate();
+				// var offset = 0;
+				// var r = new XMLHttpRequest();
+				// // r.open('GET', 'http://localhost:5255/stream/stream2', true);
+				// r.onreadystatechange = function (e) {
+				// 	console.log(r.responseText.length)
+				// }
+				// r.send();
+				
+				fetch('http://localhost:5255/stream/stream2').then((res)=>{
+					const reader = res.body.getReader()
+					var buffer = new Uint8Array()
+					const boundary = [45, 45, 106, 112, 103, 98, 111, 117, 110, 100, 97, 114, 121, 13, 10]
+					const read = () => {
+						reader.read().then(async (part)=>{
+							let current = part.value
+							let position = findSubarray(part.value, boundary)
+							while (position > -1) {
+								if (position > 0) {
+									buffer = mergeTypedArrays(buffer, current.subarray(0, position))
+								}
+								if (buffer.length > 0) {
+									const rnPosition = findSubarray(buffer, [13, 10, 13, 10])
+									const blob = new Blob([buffer.subarray(rnPosition+4)], {type: 'image/jpeg'})
+									createImageBitmap(blob).then(()=>{
+										this.ctx.drawImage(bitmap, 0, 0, 900, 500);
+										bitmap.close()
+									})
+									buffer = new Uint8Array()
+								}
+								current = current.subarray(position+boundary.length)
+								position = findSubarray(current, boundary)
+							}
+							buffer = mergeTypedArrays(buffer, current)
+							if(this.run) {
+								read()
+							}
+						})
+					}
+					read()
+				})
 			}
 		}
 		let worker = null;
@@ -106,7 +135,7 @@
 				urlParts.pop();
 			}
 			worker.postMessage({ msg: 'start', origin: urlParts.join('/'), canvas: offscreen }, [offscreen]);
-			URL.revokeObjectURL(url); // cleanup
+			URL.revokeObjectURL(url); 
 		})();
 
 
