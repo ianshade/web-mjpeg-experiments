@@ -73,10 +73,9 @@
 								if (buffer.length > 0) {
 									const rnPosition = findSubarray(buffer, [13, 10, 13, 10])
 									const blob = new Blob([buffer.subarray(rnPosition+4)], {type: 'image/jpeg'})
-									createImageBitmap(blob).then(()=>{
-										this.ctx.drawImage(bitmap, 0, 0, 900, 500);
-										bitmap.close()
-									})
+									const bitmap = await createImageBitmap(blob)
+									this.ctx.drawImage(bitmap, 0, 0, 900, 500);
+									bitmap.close()
 									buffer = new Uint8Array()
 								}
 								current = current.subarray(position+boundary.length)
